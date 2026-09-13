@@ -1,0 +1,835 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Horizonte 3D — Expedición</title>
+  <style>
+    :root{color-scheme:dark}
+    *{box-sizing:border-box}
+    html,body{
+      margin:0;width:100%;height:100%;overflow:hidden;
+      background:#101b29;color:#eef8ff;font-family:system-ui,sans-serif;
+      overscroll-behavior:none
+    }
+    canvas{display:block}
+    #view{position:fixed;inset:0;width:100%;height:100%;touch-action:none}
+    #hud{
+      position:fixed;left:14px;top:14px;padding:12px 15px;
+      background:#101c2ade;border:1px solid #ffffff22;
+      border-radius:14px;pointer-events:none;font-size:14px;
+      max-width:calc(100% - 155px)
+    }
+    #hud b{color:#7ef0da}
+    #health{
+      height:7px;width:150px;max-width:100%;background:#293747;
+      border-radius:5px;margin:8px 0;overflow:hidden
+    }
+    #healthFill{height:100%;background:#79e6b3;width:100%}
+    #radarWrap{
+      position:fixed;right:14px;top:14px;width:118px;height:118px;
+      border:1px solid #ffffff45;border-radius:12px;background:#0c1722dd
+    }
+    #radar{width:100%;height:100%;display:block}
+    #tools{position:fixed;right:14px;top:143px;display:flex;gap:7px}
+    button,select{
+      font:inherit;color:#edf9ff;background:#203448;
+      border:1px solid #ffffff33;border-radius:9px;padding:9px 12px
+    }
+    button{cursor:pointer;touch-action:none}
+    button:hover{background:#2d4861}
+    #message{
+      position:fixed;top:190px;left:50%;transform:translateX(-50%);
+      width:85%;text-align:center;color:#ffe38b;pointer-events:none;
+      text-shadow:0 2px 4px #000;font-weight:600
+    }
+    #hint{
+      position:fixed;bottom:13px;left:50%;transform:translateX(-50%);
+      padding:7px 12px;background:#0c1722c9;border-radius:10px;
+      text-align:center;pointer-events:none;font-size:12px;width:max-content;
+      max-width:95%
+    }
+    #overlay{
+      position:fixed;inset:0;background:#08121bd9;z-index:10;
+      display:flex;align-items:center;justify-content:center;padding:18px;
+      overflow:auto
+    }
+    .panel{
+      width:470px;max-width:100%;padding:26px;border-radius:20px;
+      background:linear-gradient(145deg,#21384c,#101e2d);
+      border:1px solid #93d7e24d;box-shadow:0 20px 80px #0008
+    }
+    .panel h1{margin:0 0 10px;font-size:32px}
+    .panel p{line-height:1.55;color:#cbdae7}
+    .tag{color:#7ef0da;font-size:12px;letter-spacing:3px;margin-bottom:12px}
+    .row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:15px 0}
+    .primary{
+      background:#79e5ce;color:#10232a;font-weight:800;
+      padding:13px 22px;border:0;border-radius:9px;cursor:pointer;font-size:15px
+    }
+    .primary:hover{background:#a4f7e5}
+    .primary:disabled{opacity:.5;cursor:default}
+    .small{font-size:12px;color:#aabfce}
+    #stick{
+      display:none;position:fixed;left:25px;bottom:40px;width:120px;height:120px;
+      border-radius:50%;border:2px solid #ffffff55;background:#ffffff15;
+      touch-action:none
+    }
+    #knob{
+      position:absolute;left:38px;top:38px;width:40px;height:40px;
+      border-radius:50%;background:#90efdab0;pointer-events:none
+    }
+    #fire{
+      display:none;position:fixed;right:26px;bottom:44px;
+      width:91px;height:91px;border-radius:50%;background:#b6644599;
+      border:2px solid #ffd195;font-weight:bold;color:#fff
+    }
+    #run{
+      display:none;position:fixed;right:42px;bottom:148px;
+      border-radius:30px;font-size:12px
+    }
+    body.touch #stick,body.touch #fire,body.touch #run{display:block}
+    body.touch #hint{font-size:10px;bottom:10px}
+    @media(max-width:600px){
+      #hud{font-size:12px;padding:10px}
+      .panel{padding:22px}
+      .panel h1{font-size:27px}
+    }
+  </style>
+</head>
+<body>
+  <canvas id="view"></canvas>
+
+  <div id="hud">
+    <div>Cristales: <b id="score">0 / 12</b></div>
+    <div id="health"><div id="healthFill"></div></div>
+  </div>
+
+  <div id="radarWrap"><canvas id="radar" width="118" height="118"></canvas></div>
+
+  <div id="tools">
+    <button id="pauseBtn">Ⅱ</button>
+    <button id="soundBtn">Sonido: no</button>
+  </div>
+
+  <div id="message"></div>
+  <div id="hint"></div>
+
+  <div id="stick"><div id="knob"></div></div>
+  <button id="fire">FUEGO</button>
+  <button id="run">CORRER</button>
+
+  <div id="overlay">
+    <div class="panel">
+      <div class="tag">ACCIÓN · EXPLORACIÓN · EXTRACCIÓN</div>
+      <h1>Horizonte 3D</h1>
+      <p id="description">
+        Explora el distrito, recoge 12 cristales amarillos y regresa
+        al portal azul. Los drones intentarán detenerte.
+      </p>
+      <div class="row">
+        <label for="quality">Calidad</label>
+        <select id="quality">
+          <option value="auto">Automática</option>
+          <option value="low">Baja — más rendimiento</option>
+          <option value="high">Alta — más resolución</option>
+        </select>
+        <button id="play" class="primary" disabled>Cargando motor…</button>
+      </div>
+      <p class="small">
+        El apuntado es automático. Los edificios sirven de cobertura.
+        Las zonas verdes y los árboles son decorativos.
+      </p>
+      <div id="recordLine" class="small">Récord: 0 cristales</div>
+    </div>
+  </div>
+
+  <script type="module">
+    const $=id=>document.getElementById(id);
+    let THREE;
+
+    try{
+      THREE=await import("https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js");
+    }catch(error){
+      $("description").textContent=
+        "No se pudo descargar el motor 3D. Comprueba tu conexión, "+
+        "desactiva bloqueos del CDN o vuelve a cargar la página.";
+      $("play").textContent="Error de conexión";
+      throw error;
+    }
+
+    try{
+      init();
+    }catch(error){
+      console.error(error);
+      $("overlay").style.display="flex";
+      $("description").textContent=
+        "No se pudo iniciar el juego. Necesitas un navegador con WebGL "+
+        "y aceleración gráfica. Prueba con un navegador actualizado.";
+      $("play").textContent="No disponible";
+      $("play").disabled=true;
+    }
+
+    function init(){
+      const touch=matchMedia("(pointer:coarse)").matches;
+      document.body.classList.toggle("touch",touch);
+
+      $("hint").textContent=touch
+        ? "Palanca: mover · Arrastra el escenario: girar cámara · FUEGO: atacar"
+        : "WASD / flechas: mover · Arrastrar ratón: cámara · F / clic: disparar · Mayús: correr · Esc: pausa";
+
+      const renderer=new THREE.WebGLRenderer({
+        canvas:$("view"),antialias:false,powerPreference:"high-performance"
+      });
+      renderer.outputColorSpace=THREE.SRGBColorSpace;
+      renderer.toneMapping=THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure=1.15;
+
+      const scene=new THREE.Scene();
+      scene.background=new THREE.Color("#91b9cf");
+      scene.fog=new THREE.Fog("#91b9cf",65,165);
+
+      const camera=new THREE.PerspectiveCamera(58,innerWidth/innerHeight,0.15,230);
+      scene.add(new THREE.HemisphereLight(0xd8f3ff,0x455339,2.3));
+      const sun=new THREE.DirectionalLight(0xffe0b1,2.7);
+      sun.position.set(-40,90,35);
+      scene.add(sun);
+
+      const WORLD=280,HALF=WORLD/2,GOAL=12;
+      let mode="menu",quality="auto",pixelRatio=1;
+      let yaw=0,time=0,fireTimer=0;
+      let messageTimer=0,frameCount=0,fpsClock=0,fps=60;
+      let seed=24091,best=0;
+      let audio=null,soundOn=false;
+      let touchFire=false,touchRun=false;
+      let lookId=null,lastLookX=0;
+      const keys={};
+      const joy={x:0,y:0,id:null};
+      const player={x:0,z:7,hp:100,cores:0,angle:0};
+      const colliders=[],enemies=[],pickups=[],bullets=[];
+      const temp=new THREE.Object3D();
+      const desiredCam=new THREE.Vector3();
+      const radar=$("radar").getContext("2d");
+
+      const geometries={
+        box:new THREE.BoxGeometry(1,1,1),
+        sphere:new THREE.IcosahedronGeometry(1,0),
+        crystal:new THREE.OctahedronGeometry(0.55,0),
+        bullet:new THREE.SphereGeometry(0.13,5,4),
+        trunk:new THREE.CylinderGeometry(0.16,0.24,2.5,5),
+        crown:new THREE.ConeGeometry(1.7,4.7,5)
+      };
+      const materials={
+        wall:new THREE.MeshStandardMaterial({color:0x668092,roughness:0.9}),
+        roof:new THREE.MeshStandardMaterial({color:0xa6b7bb,roughness:0.9}),
+        trunk:new THREE.MeshStandardMaterial({color:0x66533d}),
+        crown:new THREE.MeshStandardMaterial({color:0x376454,roughness:1}),
+        player:new THREE.MeshStandardMaterial({color:0x73edd5,metalness:0.25,roughness:0.45}),
+        dark:new THREE.MeshStandardMaterial({color:0x183d51,roughness:0.6}),
+        enemy:new THREE.MeshStandardMaterial({color:0xf47b62,metalness:0.25,roughness:0.5}),
+        eye:new THREE.MeshBasicMaterial({color:0xffdf99}),
+        core:new THREE.MeshStandardMaterial({color:0xffd85b,emissive:0xe7a52b,emissiveIntensity:0.45,metalness:0.4,roughness:0.28}),
+        med:new THREE.MeshStandardMaterial({color:0x8affad,emissive:0x2cbd71,emissiveIntensity:0.3}),
+        bullet:new THREE.MeshBasicMaterial({color:0xffec9e}),
+        portal:new THREE.MeshBasicMaterial({color:0x65dbff,transparent:true,opacity:0.8})
+      };
+
+      try{ best=Number(localStorage.getItem("horizonte3d-best"))||0; }catch(e){}
+      updateRecord();
+
+      function random(){
+        seed=(Math.imul(seed,1664525)+1013904223)>>>0;
+        return seed/4294967296;
+      }
+      function clamp(n,a,b){ return Math.max(a,Math.min(b,n)); }
+      function dist2D(ax,az,bx,bz){ return Math.hypot(ax-bx,az-bz); }
+      function mesh(geometry,material,x=0,y=0,z=0,sx=1,sy=1,sz=1){
+        const m=new THREE.Mesh(geometry,material);
+        m.position.set(x,y,z);
+        m.scale.set(sx,sy,sz);
+        scene.add(m);
+        return m;
+      }
+      function collides(x,z,r=0.65){
+        if(Math.abs(x)>HALF-r||Math.abs(z)>HALF-r) return true;
+        for(const b of colliders){
+          const nx=clamp(x,b.x-b.w/2,b.x+b.w/2);
+          const nz=clamp(z,b.z-b.d/2,b.z+b.d/2);
+          const dx=x-nx, dz=z-nz;
+          if(dx*dx+dz*dz<r*r) return true;
+        }
+        return false;
+      }
+      function findSpawn(minDist=15){
+        for(let i=0;i<100;i++){
+          const p={x:(random()*2-1)*(HALF-10),z:(random()*2-1)*(HALF-10)};
+          if(dist2D(p.x,p.z,0,0)>minDist && !collides(p.x,p.z,2)) return p;
+        }
+        return {x:0,z:20};
+      }
+      function say(text,seconds=4){
+        $("message").textContent=text;
+        messageTimer=seconds;
+      }
+      function updateRecord(){
+        $("recordLine").textContent="Récord: "+best+" cristales";
+      }
+
+      // --- Suelo y carreteras ---
+      const groundMat=new THREE.MeshStandardMaterial({color:0x657e61,roughness:1});
+      const ground=mesh(new THREE.PlaneGeometry(WORLD,WORLD),groundMat);
+      ground.rotation.x=-Math.PI/2;
+
+      const roadMat=new THREE.MeshStandardMaterial({color:0x40515b,roughness:1});
+      const lineMat=new THREE.MeshBasicMaterial({color:0x9ba99e});
+      for(let n=-100;n<=100;n+=50){
+        const roadX=mesh(new THREE.PlaneGeometry(9,WORLD),roadMat,n,0.01,0);
+        roadX.rotation.x=-Math.PI/2;
+        const roadZ=mesh(new THREE.PlaneGeometry(WORLD,9),roadMat,0,0.01,n);
+        roadZ.rotation.x=-Math.PI/2;
+      }
+      const centerLineH=mesh(new THREE.PlaneGeometry(WORLD,0.3),lineMat,0,0.02,0);
+      centerLineH.rotation.x=-Math.PI/2;
+      const centerLineV=mesh(new THREE.PlaneGeometry(0.3,WORLD),lineMat,0,0.02,0);
+      centerLineV.rotation.x=-Math.PI/2;
+
+      // --- Edificios (instanciados) ---
+      const buildingCount=46;
+      const walls=new THREE.InstancedMesh(geometries.box,materials.wall,buildingCount);
+      const roofs=new THREE.InstancedMesh(geometries.box,materials.roof,buildingCount);
+      scene.add(walls,roofs);
+
+      for(let i=0;i<buildingCount;i++){
+        let bx,bz,w,d,h,tries=0;
+        do{
+          bx=(random()*2-1)*HALF*0.82;
+          bz=(random()*2-1)*HALF*0.82;
+          w=6+random()*10;
+          d=6+random()*10;
+          h=6+random()*22;
+          tries++;
+        }while(
+          (Math.abs(bx)<14||Math.abs(bz)<14||dist2D(bx,bz,0,0)<16)
+          && tries<30
+        );
+        colliders.push({x:bx,z:bz,w:w+0.6,d:d+0.6});
+
+        temp.position.set(bx,h/2,bz);
+        temp.scale.set(w,h,d);
+        temp.rotation.set(0,0,0);
+        temp.updateMatrix();
+        walls.setMatrixAt(i,temp.matrix);
+        walls.setColorAt(i,new THREE.Color().setHSL(0.55+random()*0.05,0.18,0.35+random()*0.15));
+
+        temp.position.set(bx,h+0.35,bz);
+        temp.scale.set(w+0.6,0.7,d+0.6);
+        temp.updateMatrix();
+        roofs.setMatrixAt(i,temp.matrix);
+        roofs.setColorAt(i,new THREE.Color().setHSL(0.06,0.1,0.6+random()*0.2));
+      }
+      walls.instanceMatrix.needsUpdate=true;
+      roofs.instanceMatrix.needsUpdate=true;
+      if(walls.instanceColor) walls.instanceColor.needsUpdate=true;
+      if(roofs.instanceColor) roofs.instanceColor.needsUpdate=true;
+
+      // --- Árboles (instanciados, agrupados) ---
+      const treeCount=70;
+      const trunks=new THREE.InstancedMesh(geometries.trunk,materials.trunk,treeCount);
+      const crowns=new THREE.InstancedMesh(geometries.crown,materials.crown,treeCount);
+      scene.add(trunks,crowns);
+      const clusterCenters=[
+        {x:-90,z:-90},{x:90,z:-90},{x:-90,z:90},{x:90,z:90},{x:0,z:-115},{x:0,z:115}
+      ];
+      for(let i=0;i<treeCount;i++){
+        const c=clusterCenters[i%clusterCenters.length];
+        const tx=clamp(c.x+(random()*2-1)*26,-HALF+4,HALF-4);
+        const tz=clamp(c.z+(random()*2-1)*26,-HALF+4,HALF-4);
+        const s=0.7+random()*0.6;
+
+        temp.position.set(tx,1.25*s,tz);
+        temp.scale.set(s,s,s);
+        temp.rotation.set(0,random()*Math.PI,0);
+        temp.updateMatrix();
+        trunks.setMatrixAt(i,temp.matrix);
+
+        temp.position.set(tx,3.1*s,tz);
+        temp.updateMatrix();
+        crowns.setMatrixAt(i,temp.matrix);
+
+        if(random()<0.5) colliders.push({x:tx,z:tz,w:0.8*s,d:0.8*s});
+      }
+      trunks.instanceMatrix.needsUpdate=true;
+      crowns.instanceMatrix.needsUpdate=true;
+
+      // --- Jugador ---
+      const playerMesh=new THREE.Group();
+      const playerBody=mesh(geometries.box,materials.player,0,0.95,0,0.7,1.1,0.5);
+      const playerHead=mesh(geometries.sphere,materials.player,0,1.75,0,0.34,0.34,0.34);
+      playerMesh.add(playerBody,playerHead);
+      scene.add(playerMesh);
+
+      // --- Extraction portal ---
+      const portal=mesh(new THREE.TorusGeometry(2.1,0.28,10,20),materials.portal,0,2.1,0);
+      const portalGlow=mesh(new THREE.CylinderGeometry(1.9,1.9,4.1,16,1,true),materials.portal,0,2.1,0);
+      portalGlow.material=materials.portal.clone();
+      portalGlow.material.opacity=0.18;
+
+      // --- Cristales ---
+      function spawnCore(){
+        const p=findSpawn(20);
+        const core=mesh(geometries.crystal,materials.core,p.x,1.1,p.z,0.9,0.9,0.9);
+        pickups.push({type:"core",mesh:core,x:p.x,z:p.z});
+      }
+      for(let i=0;i<GOAL;i++) spawnCore();
+
+      function spawnMed(){
+        const p=findSpawn(10);
+        const med=mesh(geometries.sphere,materials.med,p.x,0.6,p.z,0.4,0.4,0.4);
+        pickups.push({type:"med",mesh:med,x:p.x,z:p.z});
+      }
+      for(let i=0;i<5;i++) spawnMed();
+
+      // --- Enemigos ---
+      function spawnEnemy(){
+        const p=findSpawn(28);
+        const group=new THREE.Group();
+        const body=new THREE.Mesh(geometries.box,materials.enemy);
+        body.scale.set(0.75,0.9,0.6);
+        body.position.y=0.85;
+        const eyeL=new THREE.Mesh(geometries.sphere,materials.eye);
+        eyeL.scale.set(0.12,0.12,0.12);
+        eyeL.position.set(-0.16,1.25,0.28);
+        const eyeR=eyeL.clone();
+        eyeR.position.x=0.16;
+        group.add(body,eyeL,eyeR);
+        group.position.set(p.x,0,p.z);
+        scene.add(group);
+        enemies.push({
+          mesh:group,x:p.x,z:p.z,hp:36,speed:2.1+random()*1.1,
+          cooldown:random()*2,alive:true
+        });
+      }
+      for(let i=0;i<6;i++) spawnEnemy();
+
+      // --- Balas ---
+      function spawnBullet(fromX,fromZ,toX,toZ,friendly){
+        const angle=Math.atan2(toX-fromX,toZ-fromZ);
+        const b=mesh(geometries.bullet,materials.bullet,fromX,1.1,fromZ);
+        bullets.push({
+          mesh:b,x:fromX,z:fromZ,
+          vx:Math.sin(angle)*22,vz:Math.cos(angle)*22,
+          life:1.4,friendly
+        });
+      }
+
+      // --- Audio sintetizado (sin archivos externos) ---
+      function ensureAudio(){
+        if(audio) return audio;
+        try{
+          const Ctx=window.AudioContext||window.webkitAudioContext;
+          audio=new Ctx();
+        }catch(e){ audio=null; }
+        return audio;
+      }
+      function beep(freq,duration,type,gain){
+        if(!soundOn) return;
+        const ctx=ensureAudio();
+        if(!ctx) return;
+        const osc=ctx.createOscillator();
+        const g=ctx.createGain();
+        osc.type=type||"sine";
+        osc.frequency.value=freq;
+        g.gain.value=gain||0.15;
+        osc.connect(g).connect(ctx.destination);
+        const now=ctx.currentTime;
+        g.gain.setValueAtTime(g.gain.value,now);
+        g.gain.exponentialRampToValueAtTime(0.001,now+duration);
+        osc.start(now);
+        osc.stop(now+duration);
+      }
+      function sfxShoot(){ beep(880,0.08,"square",0.06); }
+      function sfxHit(){ beep(220,0.15,"sawtooth",0.09); }
+      function sfxPick(){ beep(1400,0.12,"sine",0.1); }
+      function sfxHurt(){ beep(140,0.25,"triangle",0.12); }
+      function sfxWin(){ beep(660,0.4,"sine",0.14); }
+      function sfxLose(){ beep(110,0.5,"sawtooth",0.14); }
+
+      $("soundBtn").addEventListener("click",()=>{
+        soundOn=!soundOn;
+        $("soundBtn").textContent="Sonido: "+(soundOn?"sí":"no");
+        if(soundOn) ensureAudio();
+      });
+
+      // --- Controles de teclado ---
+      addEventListener("keydown",e=>{
+        keys[e.key.toLowerCase()]=true;
+        if(e.key==="Escape") togglePause();
+        if(e.key.toLowerCase()==="f") tryFireManual();
+      });
+      addEventListener("keyup",e=>{ keys[e.key.toLowerCase()]=false; });
+
+      $("view").addEventListener("mousedown",e=>{
+        if(mode!=="playing") return;
+        lookId="mouse"; lastLookX=e.clientX;
+        tryFireManual();
+      });
+      addEventListener("mouseup",()=>{ if(lookId==="mouse") lookId=null; });
+      addEventListener("mousemove",e=>{
+        if(lookId==="mouse"){
+          yaw-=(e.clientX-lastLookX)*0.006;
+          lastLookX=e.clientX;
+        }
+      });
+
+      function tryFireManual(){
+        if(mode==="playing") fireTimer=0;
+      }
+
+      // --- Controles táctiles ---
+      const stick=$("stick"), knob=$("knob"), fireBtn=$("fire"), runBtn=$("run");
+      stick.addEventListener("touchstart",e=>{
+        e.preventDefault();
+        const t=e.changedTouches[0];
+        joy.id=t.identifier;
+        joy.startX=t.clientX; joy.startY=t.clientY;
+      },{passive:false});
+      stick.addEventListener("touchmove",e=>{
+        e.preventDefault();
+        for(const t of e.changedTouches){
+          if(t.identifier!==joy.id) continue;
+          let dx=t.clientX-joy.startX, dy=t.clientY-joy.startY;
+          const max=45;
+          const len=Math.hypot(dx,dy)||1;
+          const clampedLen=Math.min(len,max);
+          dx=(dx/len)*clampedLen; dy=(dy/len)*clampedLen;
+          knob.style.left=(38+dx)+"px";
+          knob.style.top=(38+dy)+"px";
+          joy.x=dx/max; joy.y=dy/max;
+        }
+      },{passive:false});
+      function endStick(e){
+        for(const t of e.changedTouches){
+          if(t.identifier===joy.id){
+            joy.id=null; joy.x=0; joy.y=0;
+            knob.style.left="38px"; knob.style.top="38px";
+          }
+        }
+      }
+      stick.addEventListener("touchend",endStick);
+      stick.addEventListener("touchcancel",endStick);
+
+      fireBtn.addEventListener("touchstart",e=>{
+        e.preventDefault(); touchFire=true;
+      },{passive:false});
+      fireBtn.addEventListener("touchend",e=>{
+        e.preventDefault(); touchFire=false;
+      },{passive:false});
+
+      runBtn.addEventListener("touchstart",e=>{
+        e.preventDefault(); touchRun=true;
+        runBtn.style.background="#79e5ce99";
+      },{passive:false});
+      runBtn.addEventListener("touchend",e=>{
+        e.preventDefault(); touchRun=false;
+        runBtn.style.background="";
+      },{passive:false});
+
+      $("view").addEventListener("touchstart",e=>{
+        for(const t of e.changedTouches){
+          if(lookId===null && t.target===$("view")){
+            lookId=t.identifier; lastLookX=t.clientX;
+          }
+        }
+      },{passive:true});
+      $("view").addEventListener("touchmove",e=>{
+        for(const t of e.changedTouches){
+          if(t.identifier===lookId){
+            yaw-=(t.clientX-lastLookX)*0.008;
+            lastLookX=t.clientX;
+          }
+        }
+      },{passive:true});
+      $("view").addEventListener("touchend",e=>{
+        for(const t of e.changedTouches){
+          if(t.identifier===lookId) lookId=null;
+        }
+      });
+
+      // --- Pausa ---
+      $("pauseBtn").addEventListener("click",togglePause);
+      function togglePause(){
+        if(mode==="playing"){ mode="paused"; say("Pausa",999); }
+        else if(mode==="paused"){ mode="playing"; say("",0.01); }
+      }
+
+      // --- Menú / inicio ---
+      $("play").disabled=false;
+      $("play").textContent="Nueva partida";
+      $("quality").addEventListener("change",e=>{ quality=e.target.value; });
+      $("play").addEventListener("click",startGame);
+
+      function startGame(){
+        player.x=0; player.z=7; player.hp=100; player.cores=0; player.angle=0;
+        yaw=0;
+        enemies.length=0;
+        pickups.forEach(p=>scene.remove(p.mesh));
+        pickups.length=0;
+        bullets.forEach(b=>scene.remove(b.mesh));
+        bullets.length=0;
+        for(let i=0;i<GOAL;i++) spawnCore();
+        for(let i=0;i<5;i++) spawnMed();
+        for(let i=0;i<6;i++) spawnEnemy();
+        $("overlay").style.display="none";
+        mode="playing";
+        say("Busca 12 cristales amarillos y regresa al portal azul",4);
+      }
+
+      function finishGame(won){
+        mode=won?"won":"lost";
+        if(player.cores>best){
+          best=player.cores;
+          try{ localStorage.setItem("horizonte3d-best",String(best)); }catch(e){}
+          updateRecord();
+        }
+        $("overlay").style.display="flex";
+        $("description").textContent=won
+          ? "¡Extracción completada! Recogiste los 12 cristales y escapaste con vida."
+          : "Has caído en el distrito. Cristales recolectados: "+player.cores+".";
+        $("play").textContent="Reintentar";
+        won?sfxWin():sfxLose();
+      }
+
+      // --- Bucle principal ---
+      function resize(){
+        const w=innerWidth,h=innerHeight;
+        camera.aspect=w/h;
+        camera.updateProjectionMatrix();
+        renderer.setSize(w,h,false);
+        renderer.setPixelRatio(pixelRatio);
+      }
+      addEventListener("resize",resize);
+      resize();
+
+      let last=performance.now();
+      requestAnimationFrame(loop);
+
+      function loop(now){
+        const dt=Math.min((now-last)/1000,0.05);
+        last=now;
+        frameCount++;
+        fpsClock+=dt;
+        if(fpsClock>=0.5){
+          fps=frameCount/fpsClock;
+          frameCount=0; fpsClock=0;
+          adaptQuality();
+        }
+
+        if(mode==="playing") update(dt);
+        render();
+        requestAnimationFrame(loop);
+      }
+
+      function adaptQuality(){
+        if(quality!=="auto") {
+          pixelRatio = quality==="high" ? Math.min(devicePixelRatio,2) : 0.75;
+          renderer.setPixelRatio(pixelRatio);
+          return;
+        }
+        if(fps<30 && pixelRatio>0.6){
+          pixelRatio=Math.max(0.6,pixelRatio-0.1);
+          renderer.setPixelRatio(pixelRatio);
+        }else if(fps>55 && pixelRatio<1){
+          pixelRatio=Math.min(1,pixelRatio+0.05);
+          renderer.setPixelRatio(pixelRatio);
+        }
+      }
+
+      function update(dt){
+        time+=dt;
+        let mx=joy.x, mz=joy.y;
+        if(keys["w"]||keys["arrowup"]) mz=-1;
+        if(keys["s"]||keys["arrowdown"]) mz=1;
+        if(keys["a"]||keys["arrowleft"]) mx=-1;
+        if(keys["d"]||keys["arrowright"]) mx=1;
+
+        const len=Math.hypot(mx,mz);
+        if(len>1){ mx/=len; mz/=len; }
+
+        const running=keys["shift"]||touchRun;
+        const speed=(running?6.4:4.1);
+
+        if(len>0.05){
+          const worldX=Math.sin(yaw)*mz + Math.cos(yaw)*mx;
+          const worldZ=Math.cos(yaw)*mz - Math.sin(yaw)*mx;
+          const nx=player.x+worldX*speed*dt;
+          const nz=player.z+worldZ*speed*dt;
+          if(!collides(nx,player.z,0.5)) player.x=nx;
+          if(!collides(player.x,nz,0.5)) player.z=nz;
+          player.angle=Math.atan2(worldX,worldZ);
+        }
+
+        playerMesh.position.set(player.x,0,player.z);
+        playerMesh.rotation.y=player.angle;
+
+        // Cámara en tercera persona
+        const camDist=7.5, camHeight=4.2;
+        desiredCam.set(
+          player.x - Math.sin(yaw)*camDist,
+          camHeight,
+          player.z - Math.cos(yaw)*camDist
+        );
+        camera.position.lerp(desiredCam,1-Math.pow(0.001,dt));
+        camera.lookAt(player.x,1.3,player.z);
+
+        // Disparo automático hacia el enemigo más cercano
+        fireTimer-=dt;
+        let nearest=null,nearestDist=999;
+        for(const en of enemies){
+          if(!en.alive) continue;
+          const d=dist2D(player.x,player.z,en.x,en.z);
+          if(d<nearestDist){ nearestDist=d; nearest=en; }
+        }
+
+        if((keys["f"]||touchFire||keys[" "]) && fireTimer<=0){
+          fireTimer=0.22;
+          const tx=nearest?nearest.x:player.x+Math.sin(player.angle)*12;
+          const tz=nearest?nearest.z:player.z+Math.cos(player.angle)*12;
+          spawnBullet(player.x,player.z,tx,tz,true);
+          sfxShoot();
+        }
+
+        // Animación portal
+        portal.rotation.z+=dt*0.8;
+        portalGlow.rotation.y-=dt*0.5;
+
+        // Balas
+        for(let i=bullets.length-1;i>=0;i--){
+          const b=bullets[i];
+          b.x+=b.vx*dt; b.z+=b.vz*dt; b.life-=dt;
+          b.mesh.position.set(b.x,1.1,b.z);
+          let hitSomething=false;
+
+          if(b.friendly){
+            for(const en of enemies){
+              if(!en.alive) continue;
+              if(dist2D(b.x,b.z,en.x,en.z)<1.2){
+                en.hp-=18;
+                hitSomething=true;
+                sfxHit();
+                if(en.hp<=0){
+                  en.alive=false;
+                  scene.remove(en.mesh);
+                }
+                break;
+              }
+            }
+          }else{
+            if(dist2D(b.x,b.z,player.x,player.z)<0.8){
+              player.hp-=12;
+              hitSomething=true;
+              sfxHurt();
+              if(player.hp<=0) finishGame(false);
+            }
+          }
+
+          if(hitSomething||b.life<=0||collides(b.x,b.z,0.2)||Math.abs(b.x)>HALF||Math.abs(b.z)>HALF){
+            scene.remove(b.mesh);
+            bullets.splice(i,1);
+          }
+        }
+
+        // Enemigos
+        for(const en of enemies){
+          if(!en.alive) continue;
+          const d=dist2D(en.x,en.z,player.x,player.z);
+          if(d<22){
+            const angle=Math.atan2(player.x-en.x,player.z-en.z);
+            const nx=en.x+Math.sin(angle)*en.speed*dt;
+            const nz=en.z+Math.cos(angle)*en.speed*dt;
+            if(!collides(nx,en.z,0.5)) en.x=nx;
+            if(!collides(en.x,nz,0.5)) en.z=nz;
+            en.mesh.position.set(en.x,0,en.z);
+            en.mesh.rotation.y=angle;
+
+            en.cooldown-=dt;
+            if(en.cooldown<=0 && d<16){
+              en.cooldown=1.6+random()*0.8;
+              spawnBullet(en.x,en.z,player.x,player.z,false);
+            }
+          }
+        }
+
+        const aliveCount=enemies.filter(e=>e.alive).length;
+        if(aliveCount<4 && random()<0.015) spawnEnemy();
+
+        // Objetos
+        for(let i=pickups.length-1;i>=0;i--){
+          const p=pickups[i];
+          p.mesh.rotation.y+=dt*1.6;
+          if(dist2D(player.x,player.z,p.x,p.z)<1.2){
+            if(p.type==="core"){
+              player.cores++;
+              sfxPick();
+              say("¡Cristal obtenido! ("+player.cores+"/"+GOAL+")",3);
+              if(player.cores===GOAL) say("¡Todos los cristales reunidos! Corre al portal azul del centro.",6);
+            }else if(p.type==="med"){
+              player.hp=Math.min(100,player.hp+35);
+              sfxPick();
+              say("Salud restaurada",2);
+            }
+            scene.remove(p.mesh);
+            pickups.splice(i,1);
+          }
+        }
+
+        // Extracción
+        if(player.cores>=GOAL && dist2D(player.x,player.z,0,0)<3){
+          finishGame(true);
+        }
+
+        // HUD & Radar
+        $("score").textContent=player.cores+" / "+GOAL;
+        $("healthFill").style.width=Math.max(0,player.hp)+"%";
+
+        if(messageTimer>0){
+          messageTimer-=dt;
+          if(messageTimer<=0) $("message").textContent="";
+        }
+      }
+
+      function render(){
+        renderer.render(scene,camera);
+        drawRadar();
+      }
+
+      function drawRadar(){
+        const w=118, h=118, cx=w/2, cy=h/2, scale=cx/(HALF*0.9);
+        radar.fillStyle="#0c1722";
+        radar.fillRect(0,0,w,h);
+
+        for(const b of colliders){
+          radar.fillStyle="#283a48";
+          radar.fillRect(cx+(b.x-b.w/2)*scale, cy+(b.z-b.d/2)*scale, b.w*scale, b.d*scale);
+        }
+        for(const p of pickups){
+          if(p.type==="core"){
+            radar.fillStyle="#ffd85b";
+            radar.beginPath(); radar.arc(cx+p.x*scale, cy+p.z*scale, 2, 0, Math.PI*2); radar.fill();
+          }
+        }
+        for(const e of enemies){
+          if(e.alive){
+            radar.fillStyle="#f47b62";
+            radar.beginPath(); radar.arc(cx+e.x*scale, cy+e.z*scale, 2, 0, Math.PI*2); radar.fill();
+          }
+        }
+        radar.fillStyle="#65dbff";
+        radar.beginPath(); radar.arc(cx, cy, 3.5, 0, Math.PI*2); radar.fill();
+
+        radar.fillStyle="#73edd5";
+        radar.beginPath(); radar.arc(cx+player.x*scale, cy+player.z*scale, 3, 0, Math.PI*2); radar.fill();
+      }
+    }
+  </script>
+</body>
+</html>
