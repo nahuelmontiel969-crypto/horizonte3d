@@ -655,7 +655,7 @@ function getProj(color){
 }
 function releaseProj(p){ p.userData.active=false; p.visible=false;
   if(p.userData.halo){ p.remove(p.userData.halo); p.userData.halo=null; } }
-function fireProj(pos,dir,color,speed,life,dmg){ // proyectil amigo (dmg>0 aplica daño local)
+function fireProj(pos,dir,color,speed,life,dmg){
   const p=getProj(color); p.position.copy(pos);
   p.userData.dir=dir.clone().normalize(); p.userData.speed=speed;
   p.userData.life=life; p.userData.dmg=dmg; p.userData.isPart=false;
@@ -953,7 +953,7 @@ function updateDirector(dt){
     const kr=recent.length/20;
     const hpF=player.hp/player.maxHp;
     let target=.2+kr*2.6+(1-hpF)*.25;
-    if(hpF<.3) target*=.45;                       // recuento cuando sufres
+    if(hpF<.3) target*=.45;
     if(boss.active) target=Math.max(target,.85);
     target=clamp(target,.05,1);
     director.pressure+=(target-director.pressure)*.5;
@@ -973,15 +973,12 @@ function updateDirector(dt){
     $('dp-state').style.color = p<.5?'#9ffce9':p<.75?'#ff9de9':'#ff8a9a';
     $('dp-style').textContent='ESTILO: '+director.style;
   }
-  // En recuento: regeneración lenta
   if(director.pressure<.25&&!player.dead){
     player.shield=Math.min(player.maxShield,player.shield+6*dt);
     player.hp=Math.min(player.maxHp,player.hp+2*dt);
   }
-  // Humor del mundo: cielo
   BG_TMP.copy(BG_BASE).lerp(BG_RAGE,clamp((director.pressure-.35)/.65,0,1));
   scene.fog.color.copy(BG_TMP);
-  // Glitches
   const gp=director.pressure;
   if(gp>.7&&glitchT<=0&&Math.random()<dt*(gp-.6)*3) glitchBurst(.06+Math.random()*.1);
 }
@@ -1050,7 +1047,6 @@ function updatePlayer(dt){
       $('respawn-tag').style.display='none'; }
     return;
   }
-  // FOCO
   const wantFocus=(player.keys['ShiftLeft']||player.keys['ShiftRight']||touch.focus)&&!player.onBike;
   if(wantFocus&&focus.energy>0&&!focus.active){ focus.active=true; SFX.focusOn(); document.body.classList.add('focus-on'); }
   if((!wantFocus||focus.energy<=0)&&focus.active){ focus.active=false; SFX.focusOff(); document.body.classList.remove('focus-on'); }
@@ -1058,7 +1054,6 @@ function updatePlayer(dt){
   else focus.energy=Math.min(100,focus.energy+9*dt);
   if(SFX.master) SFX.master.gain.value = focus.active?.06:.16;
 
-  // movimiento
   let mF=0,mS=0;
   if(!GAME.isMobile){
     if(player.keys['KeyW'])mF+=1; if(player.keys['KeyS'])mF-=1;
@@ -1071,7 +1066,6 @@ function updatePlayer(dt){
   const rx= Math.cos(player.yaw), rz=-Math.sin(player.yaw);
   collideMove((fx*mF+rx*mS)*speed*airCtl*dt,(fz*mF+rz*mS)*speed*airCtl*dt);
 
-  // verticalidad
   if(grap.active){
     grap.t+=dt;
     const eye=new THREE.Vector3(player.pos.x,player.pos.y+1.4,player.pos.z);
@@ -1096,18 +1090,15 @@ function updatePlayer(dt){
     } else { player.pos.y=gy; player.vy=0; player.airborne=false; }
   }
 
-  // moto
   if(player.onBike&&player.currentBike){
     player.currentBike.position.set(player.pos.x,player.pos.y+.12+Math.sin(GAME.time*8)*.05,player.pos.z);
     player.currentBike.rotation.y=player.yaw;
   }
-  // mesh
   if(player.mesh){
     player.mesh.position.copy(player.pos);
     player.mesh.rotation.y=player.yaw;
     player.mesh.visible=GAME.isMobile||player.onBike;
   }
-  // cámara
   if(GAME.isMobile||player.onBike){
     const off=new THREE.Vector3(0,3.2,5.6).applyAxisAngle(new THREE.Vector3(0,1,0),player.yaw);
     camera.position.copy(player.pos).add(off);
@@ -1232,6 +1223,16 @@ function switchWeapon(i){
 }
 
 /* ================ INTERACCIÓN: MOTO + HACKEO ====================== */
+function buildHoverbike(idx){
+  const g=new THREE.Group();
+  const mat=new THREE.MeshStandardMaterial({color:0x1b2030,metalness:.7,roughness:.3});
+  const body=new THREE.Mesh(new THREE.BoxGeometry(.8,.3,2.2),mat); body.position.y=.4;
+  const glow=new THREE.Mesh(new THREE.BoxGeometry(.7,.1,1.8),new THREE.MeshBasicMaterial({color:0x00f6ff}));
+  glow.position.set(0,.28,0);
+  g.add(body,glow,makeHalo(0x00f6ff,2.5));
+  g.userData={idx, mounted:false};
+  return g;
+}
 function nearestBike(){
   return world.bikes.find(b=>!b.userData.mounted&&b.position.distanceTo(player.pos)<2.4);
 }
@@ -1296,7 +1297,6 @@ function die(){
   } else { player.respawnT=4; $('respawn-tag').style.display='block'; }
 }
 director.peak=.2;
-function fmtTime(s){ const m=Math.floor(s/60),ss=Math.floor(s%60); return `${m}:${ss<10?'0':''}${ss}`; }
 function resetRun(){
   player.dead=false; player.hp=player.maxHp; player.shield=player.maxShield;
   player.mags=WEAPONS.map(w=>w.magSize); player.reserve=180;
@@ -1327,7 +1327,6 @@ function clearEntities(){
 
 /* ==================== PROYECTILES · UPDATE ======================== */
 function updateProjectiles(dt){
-  // amigos (jugador + visuales de remotos) y partículas
   for(let i=world.projs.length-1;i>=0;i--){
     const p=world.projs[i];
     if(p.userData.isPart){
@@ -1340,7 +1339,7 @@ function updateProjectiles(dt){
     p.position.addScaledVector(p.userData.dir,p.userData.speed*dt);
     p.userData.life-=dt;
     let dead=p.userData.life<=0;
-    if(!dead){ // impacto en drones
+    if(!dead){
       for(const d of world.drones){
         if(d.userData.isAlly) continue;
         if(p.position.distanceTo(d.position)<.85){
@@ -1351,7 +1350,6 @@ function updateProjectiles(dt){
           dead=true; break;
         }
       }
-      // impacto en boss
       if(!dead&&boss.active){
         const core=bossWorld('core',_bw);
         if(p.position.distanceTo(core)<1.5){
@@ -1377,7 +1375,6 @@ function updateProjectiles(dt){
           }
         }
       }
-      // impacto en edificios (destructibles)
       if(!dead){
         for(const b of world.abb){ if(b.dead) continue;
           if(p.position.x>b.x0&&p.position.x<b.x1&&p.position.z>b.z0&&p.position.z<b.z1&&p.position.y<b.h){
@@ -1390,7 +1387,6 @@ function updateProjectiles(dt){
     }
     if(dead||p.userData.life<=0){ releaseProj(p); world.projs.splice(i,1); }
   }
-  // enemigos
   for(let i=world.eprojs.length-1;i>=0;i--){
     const p=world.eprojs[i];
     p.position.addScaledVector(p.userData.dir,p.userData.speed*dt);
@@ -1412,7 +1408,6 @@ function updateProjectiles(dt){
     }
     if(dead){ releaseProj(p); world.eprojs.splice(i,1); }
   }
-  // muertes (autoridad local/host)
   if(GAME.mode!=='client'){
     for(const d of [...world.drones]){
       if(d.userData.hp<=0) killDrone(d, d.userData.lastHitBy);
@@ -1504,383 +1499,360 @@ function setupTouch(){
 function genRoomCode(){
   const chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let s=''; for(let i=0;i<6;i++) s+=chars[Math.floor(Math.random()*chars.length)];
-  return 'H3D-'+s;
+  return s;
 }
-const Net={
-  peer:null, conns:[], roomCode:null, cstate:{}, cfgs:{}, snapT:0, newShots:[], remote:{},
-  broadcast(m){ this.conns.forEach(c=>{ if(c.open) c.send(m); }); },
-  send(m){ if(GAME.mode==='host') this.broadcast(m); else if(this.conns[0]&&this.conns[0].open) this.conns[0].send(m); },
-  sendTo(peerId,m){ const c=this.conns.find(x=>x.peer===peerId); if(c&&c.open) c.send(m); },
-  addShots(arr){ this.newShots.push(arr); },
-  destroy(){
-    if(this.peer){ try{this.peer.destroy();}catch(e){} }
-    this.peer=null; this.conns=[]; this.cstate={}; this.cfgs={}; this.newShots=[];
-    for(const id in this.remote) scene.remove(this.remote[id].mesh);
-    this.remote={};
+const Net = {
+  peer:null, conns:[], cstate:{}, hostConn:null, roomId:null, isHost:false,
+  initHost(onReady, onError){
+    this.roomId = genRoomCode();
+    this.peer = new Peer('H3D-'+this.roomId, {debug:0});
+    this.peer.on('open', () => {
+      this.isHost = true;
+      onReady(this.roomId);
+    });
+    this.peer.on('error', () => {
+      this.peer = new Peer(null, {debug:0});
+      this.peer.on('open', () => {
+        this.isHost = true;
+        onReady(this.roomId);
+      });
+    });
+    this.peer.on('connection', c => {
+      this.conns.push(c);
+      c.on('data', data => this.handleData(c.peer, data));
+      c.on('close', () => {
+        this.conns = this.conns.filter(x=>x!==c);
+        delete this.cstate[c.peer];
+        removeRemotePlayer(c.peer);
+      });
+    });
   },
-  upsertRemote(id,st){
-    let r=this.remote[id];
-    if(!r){
-      r={ mesh:buildAvatar(this.cfgs[id]||GAME.avatar,false), bike:null, tx:0,ty:0,tz:0,yaw:0 };
-      this.remote[id]=r; scene.add(r.mesh);
-    }
-    r.tx=st[0]; r.ty=st[1]; r.tz=st[2]; r.yaw=st[3]; r.st=st[4]; r.hp=st[5];
+  join(code, onConnected, onError){
+    this.isHost = false;
+    this.peer = new Peer(null, {debug:0});
+    this.peer.on('open', () => {
+      const conn = this.peer.connect('H3D-'+code.toUpperCase());
+      this.hostConn = conn;
+      conn.on('open', () => {
+        this.conns = [conn];
+        onConnected();
+      });
+      conn.on('data', data => this.handleData('HOST', data));
+      conn.on('close', () => { toast('CONEXIÓN PERDIDA CON EL ANFITRIÓN'); });
+      conn.on('error', () => onError());
+    });
+    this.peer.on('error', () => onError());
   },
-  updateRemotes(dt){
-    const k=Math.min(1,dt*10);
-    for(const id in this.remote){
-      const r=this.remote[id];
-      r.mesh.position.x+=(r.tx-r.mesh.position.x)*k;
-      r.mesh.position.y+=(r.ty-r.mesh.position.y)*k;
-      r.mesh.position.z+=(r.tz-r.mesh.position.z)*k;
-      r.mesh.rotation.y+=(r.yaw-r.mesh.rotation.y)*k;
-      const wantBike=r.st===1;
-      if(wantBike&&!r.bike){ r.bike=buildHoverbike(0); r.mesh.add(r.bike); }
-      if(!wantBike&&r.bike){ r.mesh.remove(r.bike); r.bike=null; }
+  send(data){
+    if(this.isHost){
+      for(const c of this.conns) c.send(data);
+    } else if(this.hostConn){
+      this.hostConn.send(data);
     }
   },
-  hostSnapshot(){
-    if(!this.conns.length) return;
-    const p={};
-    p[this.peer.id]=[player.pos.x,player.pos.y,player.pos.z,player.yaw,
-      player.dead?2:(player.onBike?1:0),player.hp];
-    for(const id in this.cstate){ const c=this.cstate[id];
-      p[id]=[c.pos.x,c.pos.y,c.pos.z,c.yaw,c.st,c.hp]; }
-    const e=world.drones.map(d=>[d.userData.id,d.position.x,d.position.y,d.position.z,d.userData.isAlly?1:0]);
-    const b=boss.active&&boss.g?[boss.g.position.x,boss.g.position.z,boss.g.rotation.y,
-      boss.hp,boss.maxhp,boss.armL>0?1:0,boss.armR>0?1:0]:null;
-    this.broadcast({t:'S',p,e,b,s:this.newShots,wv:GAME.wave,dp:director.pressure,ds:director.state});
-    this.newShots=[];
+  sendTo(peerId, data){
+    const c = this.conns.find(x=>x.peer===peerId);
+    if(c) c.send(data);
   },
-  applySnapshot(m){
-    for(const id in m.p){ if(id!==this.peer.id) this.upsertRemote(id,m.p[id]); }
-    const seen=new Set();
-    for(const e of m.e){
-      seen.add(e[0]);
-      let d=world.drones.find(x=>x.userData.id===e[0]);
-      if(!d) d=spawnDrone(e[1],e[3]);
-      d.userData.tx=e[1]; d.userData.ty=e[2]; d.userData.tz=e[3];
-      if(e[4]===1&&!d.userData.isAlly){ d.userData.isAlly=true; setAllyVisual(d); }
-    }
-    for(const d of [...world.drones]){
-      if(!seen.has(d.userData.id)){ explosion(d.position,0xffaa33); scene.remove(d);
-        world.drones.splice(world.drones.indexOf(d),1); }
-    }
-    if(m.b){
-      if(!boss.active){ boss.g=buildBossMesh(); scene.add(boss.g); boss.active=true;
-        $('boss-bar').classList.add('on'); SFX.bossRoar(); }
-      boss.g.position.x+=(m.b[0]-boss.g.position.x)*.2;
-      boss.g.position.z+=(m.b[1]-boss.g.position.z)*.2;
-      boss.g.rotation.y=m.b[2];
-      boss.hp=m.b[3]; boss.maxhp=m.b[4];
-      boss.g.userData.armL.visible=m.b[5]===1;
-      boss.g.userData.armR.visible=m.b[6]===1;
-      $('boss-fill').style.width=Math.max(0,boss.hp/boss.maxhp*100)+'%';
-    } else if(boss.active) bossDie(false);
-    for(const s of m.s) fireEnemyShot(new THREE.Vector3(s[0],s[1],s[2]),new THREE.Vector3(s[3],s[4],s[5]),22,7,true);
-    if(m.wv!==GAME.wave){ GAME.wave=m.wv; waveBanner('OLEADA '+GAME.wave); }
-    if(m.dp!==undefined){ director.pressure=m.dp;
-      $('dp-state').textContent=m.ds||'—';
-      $('dp-fill').style.width=(m.dp*100)+'%'; }
+  broadcast(data){
+    if(this.isHost) this.send(data);
   },
-  handleFrom(id,m){
-    if(m.t==='p'){
-      if(!this.cstate[id]) this.cstate[id]={pos:new THREE.Vector3(m.x,m.y,m.z),yaw:m.yaw,st:m.st,hp:m.hp};
-      const c=this.cstate[id];
-      c.pos.set(m.x,m.y,m.z); c.yaw=m.yaw; c.st=m.st; c.hp=m.hp;
-    }
-    else if(m.t==='hi'&&GAME.mode==='host'){ this.cfgs[id]=m.cfg; this.broadcastRoster(); }
-    else if(m.t==='roster'){
-      m.players.forEach(pl=>{ if(pl.id!==this.peer.id) this.cfgs[pl.id]=pl.cfg; });
-      for(const pid in this.cfgs) if(pid!==this.peer.id){
-        const c=this.cstate[pid]||{pos:new THREE.Vector3(0,0,0),yaw:0,st:0,hp:100};
-        this.upsertRemote(pid,[c.pos.x,c.pos.y,c.pos.z,c.yaw,c.st,c.hp]);
+  handleData(fromId, data){
+    if(this.isHost){
+      if(data.t==='p'){
+        this.cstate[fromId] = {pos:new THREE.Vector3(data.x,data.y,data.z), yaw:data.yaw, st:data.st, hp:data.hp};
+        for(const c of this.conns){
+          if(c.peer!==fromId) c.send({t:'cp',id:fromId, x:data.x, y:data.y, z:data.z, yaw:data.yaw, st:data.st});
+        }
+        updateRemotePlayerMesh(fromId, data);
+      } else if(data.t==='f'){
+        for(const c of this.conns){
+          if(c.peer!==fromId) c.send(data);
+        }
+        fireProj(new THREE.Vector3(data.x,data.y,data.z), new THREE.Vector3(data.dx,data.dy,data.dz), WEAPONS[data.wi].color, WEAPONS[data.wi].speed, 2, 0);
+      } else if(data.t==='eh'){
+        const d = world.drones.find(x=>x.userData.id===data.id);
+        if(d){ d.userData.hp-=data.dmg; d.userData.lastHitBy=fromId; }
+      } else if(data.t==='bh'){
+        bossDamage(data.part, data.amt);
+      } else if(data.t==='bdh'){
+        damageBuilding(data.i, data.amt);
+      } else if(data.t==='hk'){
+        const d = world.drones.find(x=>x.userData.id===data.id);
+        if(d && !d.userData.isAlly){ d.userData.isAlly=true; setAllyVisual(d); }
+      } else if(data.t==='kc'){
+        GAME.kills++; addWeaponXp(player.weaponIdx,34); registerKill();
+      }
+    } else {
+      if(data.t==='bd'){
+        destroyBuilding(data.i, false);
+      } else if(data.t==='bs'){
+        if(!boss.active){
+          boss.g=buildBossMesh();
+          boss.g.position.set(data.x, 0, data.z);
+          scene.add(boss.g);
+          boss.active=true; boss.hp=boss.maxhp=data.hp;
+          $('boss-bar').classList.add('on');
+          waveBanner('ANOMALÍA: COLOSSUS'); SFX.bossRoar();
+        }
+      } else if(data.t==='bx'){
+        bossDie(false);
+      } else if(data.t==='cp'){
+        updateRemotePlayerMesh(data.id, data);
+      } else if(data.t==='f'){
+        fireProj(new THREE.Vector3(data.x,data.y,data.z), new THREE.Vector3(data.dx,data.dy,data.dz), WEAPONS[data.wi].color, WEAPONS[data.wi].speed, 2, 0);
+      } else if(data.t==='dm'){
+        damagePlayer(data.amt);
       }
     }
-    else if(m.t==='f'&&GAME.mode==='host'){ this.broadcast({...m,id}); }
-    else if(m.t==='f'){ if(m.id&&m.id!==this.peer.id)
-      fireProj(new THREE.Vector3(m.x,m.y,m.z),new THREE.Vector3(m.dx,m.dy,m.dz),
-        WEAPONS[m.wi].color,WEAPONS[m.wi].speed,2,0); }
-    else if(m.t==='eh'&&GAME.mode==='host'){
-      const d=world.drones.find(x=>x.userData.id===m.id);
-      if(d){ d.userData.hp-=m.dmg; d.userData.lastHitBy=id; }
-    }
-    else if(m.t==='bh'&&GAME.mode==='host') bossDamage(m.part,m.amt);
-    else if(m.t==='bdh'&&GAME.mode==='host') damageBuilding(m.i,m.amt);
-    else if(m.t==='hk'&&GAME.mode==='host'){
-      const d=world.drones.find(x=>x.userData.id===m.id&&!x.userData.isAlly);
-      if(d) convertToAlly(d);
-    }
-    else if(m.t==='kc'){ if(m.id===this.peer.id){ GAME.kills++; addWeaponXp(player.weaponIdx,34); registerKill(); } }
-    else if(m.t==='dm'){ if(GAME.mode==='client') damagePlayer(m.amt); }
-    else if(m.t==='bk'){
-      const b=world.bikes.find(x=>x.userData.idx===m.idx);
-      if(b){ b.userData.mounted=m.take===1; b.visible=m.take!==1;
-        if(m.take===0&&m.x!==undefined) b.position.set(m.x,.1,m.z); }
-    }
-    else if(m.t==='bd'&&GAME.mode==='client') destroyBuilding(m.i,false);
-    else if(m.t==='bs'&&GAME.mode==='client'&&!boss.active){
-      boss.g=buildBossMesh(); boss.g.position.set(m.x,0,m.z); scene.add(boss.g);
-      boss.active=true; boss.hp=boss.maxhp=m.hp;
-      $('boss-bar').classList.add('on');
-      waveBanner('ANOMALÍA: COLOSSUS'); SFX.bossRoar();
-    }
-    else if(m.t==='bx'&&GAME.mode==='client') bossDie(false);
-    else if(m.t==='S'&&GAME.mode==='client') this.applySnapshot(m);
-  },
-  broadcastRoster(){
-    const players=Object.keys(this.cfgs).map(k=>({id:k,cfg:this.cfgs[k]}));
-    players.push({id:this.peer.id,cfg:GAME.avatar});
-    this.cfgs[this.peer.id]=GAME.avatar;
-    this.broadcast({t:'roster',players});
   }
 };
 
-/* ============================ UI ================================== */
+const remotePlayers = {};
+function updateRemotePlayerMesh(id, data){
+  let rp = remotePlayers[id];
+  if(!rp){
+    rp = buildAvatar({visor:'#ff2b3f', armor:'armor_carbon', back:'back_jet'});
+    scene.add(rp);
+    remotePlayers[id] = rp;
+  }
+  rp.position.set(data.x, data.y, data.z);
+  rp.rotation.y = data.yaw;
+  rp.visible = data.st !== 2;
+}
+function removeRemotePlayer(id){
+  if(remotePlayers[id]){
+    scene.remove(remotePlayers[id]);
+    delete remotePlayers[id];
+  }
+}
+
+/* ==================== INTERFAZ Y NAVEGACIÓN ======================= */
 function showScreen(id){
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active','in'));
-  if(id){ const el=$(id); el.classList.add('active');
-    requestAnimationFrame(()=>el.classList.add('in')); }
+  const el = $(id);
+  if(el){
+    el.classList.add('active');
+    setTimeout(()=>el.classList.add('in'),10);
+  }
 }
-function toast(msg){ const t=$('toast'); t.textContent=msg; t.style.opacity=1;
-  clearTimeout(toast._t); toast._t=setTimeout(()=>t.style.opacity=0,1600); }
-function waveBanner(txt){ const b=$('wave-banner'); b.textContent=txt; b.style.opacity=1;
-  clearTimeout(waveBanner._t); waveBanner._t=setTimeout(()=>b.style.opacity=0,1800); }
-function mkBanner(txt){ const b=$('mk-banner'); b.textContent=txt;
-  b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop'); }
-function flashObjective(txt){ const el=$('objective'); el.textContent=txt;
-  clearTimeout(flashObjective._t);
-  flashObjective._t=setTimeout(()=>el.textContent='OBJETIVO: SOBREVIVIR',2200); }
+function toast(msg){
+  const t=$('toast'); t.textContent=msg; t.style.opacity=1;
+  setTimeout(()=>t.style.opacity=0,2400);
+}
+function waveBanner(txt){
+  const b=$('wave-banner'); b.textContent=txt; b.style.opacity=1;
+  setTimeout(()=>b.style.opacity=0,3200);
+}
+function mkBanner(txt){
+  const b=$('mk-banner'); b.textContent=txt; b.className='pop';
+  setTimeout(()=>b.className='',900);
+}
+function flashObjective(txt){
+  $('objective').innerHTML=`OBJETIVO: <b>${txt}</b>`;
+}
 
-function buildCustomizationUI(){
-  const sw=$('sw-visor'); sw.innerHTML='';
-  VISOR_COLORS.forEach(c=>{
-    const d=document.createElement('div');
-    d.className='swatch'+(GAME.avatar.visor===c.hex?' sel':'');
-    d.style.background=c.hex; d.style.color=c.hex; d.title=c.name;
-    d.addEventListener('click',()=>{ GAME.avatar.visor=c.hex;
-      [...sw.children].forEach(x=>x.classList.remove('sel')); d.classList.add('sel');
-      refreshLobbyAvatar(); });
+$('btn-solo').addEventListener('click', ()=>{
+  GAME.mode='solo';
+  $('lobby-room-tag').textContent='MODO: SOLITARIO';
+  showScreen('screen-lobby');
+  initLobbyScene();
+});
+$('btn-create').addEventListener('click', ()=>{
+  GAME.mode='host';
+  $('lobby-room-tag').textContent='SALA P2P (ANFITRIÓN)';
+  $('host-status').textContent='Creando sala en red…';
+  showScreen('screen-host');
+  Net.initHost(code => {
+    $('host-code').textContent = code;
+    $('host-status').textContent = 'Sala lista. Esperando escuadrón…';
+  }, () => {
+    $('host-status').textContent = 'Error al crear sala.';
+  });
+});
+$('host-code').addEventListener('click', ()=>{
+  navigator.clipboard.writeText($('host-code').textContent);
+  toast('¡CÓDIGO COPIADO AL PORTAPAPELES!');
+});
+$('host-continue').addEventListener('click', ()=>{
+  showScreen('screen-lobby');
+  initLobbyScene();
+});
+$('host-cancel').addEventListener('click', ()=>showScreen('screen-title'));
+
+$('btn-join').addEventListener('click', ()=>showScreen('screen-join'));
+$('join-cancel').addEventListener('click', ()=>showScreen('screen-title'));
+$('join-confirm').addEventListener('click', ()=>{
+  const code = $('join-code').value.trim();
+  if(!code || code.length<6){ $('join-status').textContent='Introduce un código válido de 6 caracteres'; return; }
+  $('join-status').textContent='Conectando al escuadrón…';
+  Net.join(code, ()=>{
+    GAME.mode='client';
+    $('lobby-room-tag').textContent='SALA P2P (UNIDO)';
+    showScreen('screen-lobby');
+    initLobbyScene();
+  }, ()=>{
+    $('join-status').textContent='No se pudo conectar a la sala.';
+  });
+});
+
+$('lobby-back').addEventListener('click', ()=>showScreen('screen-title'));
+
+(function initCustomizer(){
+  const sw=$('sw-visor');
+  VISOR_COLORS.forEach((v,i)=>{
+    const d=document.createElement('div'); d.className='swatch'+(i===0?' sel':'');
+    d.style.backgroundColor=v.hex; d.style.color=v.hex;
+    d.addEventListener('click', ()=>{
+      sw.querySelectorAll('.swatch').forEach(x=>x.classList.remove('sel'));
+      d.classList.add('sel'); GAME.avatar.visor=v.hex; refreshLobbyAvatar();
+    });
     sw.appendChild(d);
   });
-  const ca=$('chip-armor'); ca.innerHTML='';
-  ARMOR_STYLES.forEach(a=>{
-    const c=document.createElement('div');
-    c.className='chip'+(GAME.avatar.armor===a.id?' sel':''); c.textContent=a.label;
-    c.addEventListener('click',()=>{ GAME.avatar.armor=a.id;
-      [...ca.children].forEach(x=>x.classList.remove('sel')); c.classList.add('sel');
-      refreshLobbyAvatar(); });
-    ca.appendChild(c);
-  });
-  const cb=$('chip-back'); cb.innerHTML='';
-  BACK_STYLES.forEach(b=>{
-    const c=document.createElement('div');
-    c.className='chip'+(GAME.avatar.back===b.id?' sel':''); c.textContent=b.label;
-    c.addEventListener('click',()=>{ GAME.avatar.back=b.id;
-      [...cb.children].forEach(x=>x.classList.remove('sel')); c.classList.add('sel');
-      refreshLobbyAvatar(); });
-    cb.appendChild(c);
-  });
-}
-function goToLobby(mode){
-  GAME.mode=mode; GAME.state='lobby';
-  $('lobby-room-tag').textContent =
-    mode==='solo' ? 'MODO: SOLITARIO' :
-    mode==='host' ? `SALA: ${Net.roomCode}` : `SALA: ${Net.roomCode} (INVITADO)`;
-  initLobbyScene(); buildCustomizationUI();
-  showScreen('screen-lobby');
-}
 
- $('btn-solo').addEventListener('click',()=>goToLobby('solo'));
- $('btn-create').addEventListener('click',()=>{
-  showScreen('screen-host');
-  $('host-status').textContent='Creando sala…';
-  Net.peer=new Peer(genRoomCode(),{debug:0});
-  GAME.mode='host';
-  Net.peer.on('open',id=>{ Net.roomCode=id;
-    $('host-code').textContent=id;
-    $('host-status').textContent='Sala lista. Esperando jugadores…'; });
-  Net.peer.on('connection',conn=>{
-    Net.conns.push(conn);
-    $('host-status').textContent=`${Net.conns.length} jugador(es) conectado(s)`;
-    conn.on('data',d=>Net.handleFrom(conn.peer,d));
-    conn.on('open',()=>conn.send({t:'roster',players:[{id:Net.peer.id,cfg:GAME.avatar}]}));
-    conn.on('close',()=>{
-      Net.conns=Net.conns.filter(c=>c!==conn);
-      if(Net.remote[conn.peer]){ scene.remove(Net.remote[conn.peer].mesh); delete Net.remote[conn.peer]; }
-      delete Net.cstate[conn.peer]; delete Net.cfgs[conn.peer];
-      if(GAME.mode==='host') Net.broadcastRoster(); });
-  });
-  Net.peer.on('error',err=>{ $('host-status').textContent='Error: '+err.type; });
-});
- $('host-code').addEventListener('click',()=>{
-  const code=$('host-code').textContent;
-  if(navigator.clipboard) navigator.clipboard.writeText(code).then(()=>toast('CÓDIGO COPIADO'));
-});
- $('host-continue').addEventListener('click',()=>goToLobby('host'));
- $('host-cancel').addEventListener('click',()=>{ Net.destroy(); GAME.mode='solo'; showScreen('screen-title'); });
- $('btn-join').addEventListener('click',()=>showScreen('screen-join'));
- $('join-cancel').addEventListener('click',()=>{ Net.destroy(); GAME.mode='solo'; showScreen('screen-title'); });
- $('join-confirm').addEventListener('click',()=>{
-  const code=$('join-code').value.trim().toUpperCase();
-  if(!code){ $('join-status').textContent='Introduce un código válido'; return; }
-  $('join-status').textContent='Conectando…';
-  Net.peer=new Peer({debug:0});
-  GAME.mode='client';
-  Net.peer.on('open',()=>{
-    const conn=Net.peer.connect(code,{reliable:true});
-    conn.on('open',()=>{
-      Net.conns.push(conn); Net.roomCode=code;
-      conn.send({t:'hi',cfg:GAME.avatar});
-      $('join-status').textContent='¡Conectado!';
-      setTimeout(()=>goToLobby('client'),400);
+  const chipArmor=$('chip-armor');
+  ARMOR_STYLES.forEach((a,i)=>{
+    const c=document.createElement('div'); c.className='chip'+(i===0?' sel':'');
+    c.textContent=a.label;
+    c.addEventListener('click', ()=>{
+      chipArmor.querySelectorAll('.chip').forEach(x=>x.classList.remove('sel'));
+      c.classList.add('sel'); GAME.avatar.armor=a.id; refreshLobbyAvatar();
     });
-    conn.on('data',d=>Net.handleFrom(conn.peer,d));
-    conn.on('error',()=>{ $('join-status').textContent='No se pudo conectar'; });
+    chipArmor.appendChild(c);
   });
-  Net.peer.on('error',err=>{ $('join-status').textContent='Error: '+err.type; });
-});
- $('lobby-back').addEventListener('click',()=>{
-  clearLobbyScene(); Net.destroy(); GAME.mode='solo';
-  GAME.state='title'; showScreen('screen-title'); initLobbyScene();
-});
- $('btn-enter').addEventListener('click',()=>enterCity());
- $('btn-retry').addEventListener('click',()=>resetRun());
- $('btn-menu').addEventListener('click',()=>{
-  resetRun(); clearEntities();
-  $('hud').classList.remove('on'); $('touch-ui').classList.remove('on');
-  if(player.mesh){ scene.remove(player.mesh); player.mesh=null; }
-  if(document.pointerLockElement) document.exitPointerLock();
-  document.body.classList.remove('focus-on'); canvas.style.filter='';
-  $('glitch').style.opacity=0;
-  Net.destroy(); GAME.mode='solo'; GAME.state='title';
-  showScreen('screen-title'); initLobbyScene();
-});
 
-function enterCity(){
+  const chipBack=$('chip-back');
+  BACK_STYLES.forEach((b,i)=>{
+    const c=document.createElement('div'); c.className='chip'+(i===0?' sel':'');
+    c.textContent=b.label;
+    c.addEventListener('click', ()=>{
+      chipBack.querySelectorAll('.chip').forEach(x=>x.classList.remove('sel'));
+      c.classList.add('sel'); GAME.avatar.back=b.id; refreshLobbyAvatar();
+    });
+    chipBack.appendChild(c);
+  });
+})();
+
+$('btn-enter').addEventListener('click', ()=>{
   clearLobbyScene();
-  if(!world.builtOnce) buildCity();
-  spawnPlayer();
-  GAME.state='playing'; GAME.time=0;
+  startGame();
+});
+
+$('btn-retry').addEventListener('click', ()=>resetRun());
+$('btn-menu').addEventListener('click', ()=>{
+  resetRun();
+  showScreen('screen-title');
+});
+
+function startGame(){
+  GAME.state='playing';
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active','in'));
   $('hud').classList.add('on');
-  $('pc-hint').style.opacity=1;
-  setTimeout(()=>{ if(GAME.state==='playing') $('pc-hint').style.opacity=0; },9000);
-  if(GAME.isMobile) $('touch-ui').classList.add('on');
-  showScreen(null);
-  waveBanner('OLEADA 1'); SFX.wave();
-}
-function spawnPlayer(){
-  if(player.mesh) scene.remove(player.mesh);
-  player.mesh=buildAvatar(GAME.avatar,!GAME.isMobile);
-  scene.add(player.mesh);
-  player.pos.set(0,0,-2);
-  player.hp=player.maxHp; player.shield=player.maxShield;
-  player.mags=WEAPONS.map(w=>w.magSize); player.reserve=180;
-  player.dead=false;
-  if(Net.peer) Net.cfgs[Net.peer.id]=GAME.avatar;
-}
-
-/* ========================= HUD / MINIMAPA ========================= */
-function buildHoverbike(idx){
-  const g=new THREE.Group();
-  const body=new THREE.Mesh(new THREE.CapsuleGeometry(.28,1.5,4,8),
-    new THREE.MeshStandardMaterial({color:0x1a1c26,metalness:.8,roughness:.25}));
-  body.rotation.z=Math.PI/2; body.position.y=.6; g.add(body);
-  const c=idx%2?0xff2bd6:0x00f6ff;
-  const glow=new THREE.Mesh(new THREE.TorusGeometry(.3,.05,8,16),new THREE.MeshBasicMaterial({color:c}));
-  glow.rotation.y=Math.PI/2; glow.position.set(-.75,.55,0); g.add(glow);
-  const h=makeHalo(c,2.2); h.position.set(0,.25,0); g.add(h);
-  g.userData={idx,mounted:false};
-  return g;
-}
-function refreshHud(){
-  $('hp-fill').style.width=Math.max(0,player.hp/player.maxHp*100)+'%';
-  $('sh-fill').style.width=Math.max(0,player.shield/player.maxShield*100)+'%';
-  $('en-fill').style.width=focus.energy+'%';
-  $('hp-label').textContent=`SALUD ${player.hp|0}/${player.maxHp}`;
-  $('sh-label').textContent=`ESCUDO ${player.shield|0}/${player.maxShield}`;
-  $('en-label').textContent=`FOCO ${focus.energy|0}%`;
-  $('kill-count').textContent=GAME.kills;
-  $('wave-num').textContent=GAME.wave;
-  const w=WEAPONS[player.weaponIdx];
-  $('weapon-tag').innerHTML=(player.reloading>0?'RECARGANDO…':w.label)+` <i>NV·${w.lvl}</i>`;
-  $('ammo-tag').innerHTML=`MUN.<br><b>${player.mags[player.weaponIdx]}/${player.reserve}</b>`;
-  const ht=$('hack-tag');
-  if(hackT>0&&hackTarget){ ht.textContent=`HACKEANDO… ${Math.floor(hackT*100)}%`; ht.classList.add('show'); }
-  else if(player.onBike){ ht.textContent='[E] BAJAR DE LA MOTO'; ht.classList.add('show'); }
-  else if(nearestBike()){ ht.textContent='[E] MONTAR HOVERBIKE'; ht.classList.add('show'); }
-  else if(world.drones.some(d=>!d.userData.isAlly&&d.position.distanceTo(player.pos)<4.5)){
-    ht.textContent='[MANTÉN E] HACKEAR DRONE'; ht.classList.add('show'); }
-  else if(grap.active){ ht.textContent='GANCHO CONECTADO'; ht.classList.add('show'); }
-  else ht.classList.remove('show');
-  const lowHp=player.hp<30&&!player.dead ? .16+.1*Math.sin(GAME.time*7) : 0;
-  $('dmg').style.opacity=Math.min(1,Math.max(hurtT*.9,lowHp));
-}
-function drawMinimap(){
-  const cvs=$('minimap'), ctx=cvs.getContext('2d');
-  ctx.clearRect(0,0,120,120);
-  ctx.save();
-  ctx.beginPath(); ctx.arc(60,60,58,0,7); ctx.clip();
-  ctx.fillStyle='rgba(0,10,20,.4)'; ctx.fillRect(0,0,120,120);
-  const s=120/150;
-  ctx.translate(60,60); ctx.rotate(player.yaw);
-  ctx.fillStyle='rgba(120,170,210,.28)';
-  for(const b of world.abb){ if(b.dead) continue;
-    const dx=b.cx-player.pos.x, dz=b.cz-player.pos.z;
-    if(Math.abs(dx)<75&&Math.abs(dz)<75){
-      const w=b.w*s;
-      ctx.fillRect(dx*s-w/2,dz*s-w/2,w,w); } }
-  const dot=(x,z,color,r)=>{ const dx=x-player.pos.x,dz=z-player.pos.z;
-    if(Math.abs(dx)>75||Math.abs(dz)>75) return;
-    ctx.fillStyle=color; ctx.beginPath(); ctx.arc(dx*s,dz*s,r,0,7); ctx.fill(); };
-  world.bikes.forEach(b=>{ if(!b.userData.mounted) dot(b.position.x,b.position.z,'#00f6ff',2.5); });
-  world.pickups.forEach(p=>dot(p.position.x,p.position.z,'#ffd23f',2));
-  world.drones.forEach(d=>dot(d.position.x,d.position.z,d.userData.isAlly?'#39ff6a':'#ff3b5c',3));
-  if(boss.active&&boss.g) dot(boss.g.position.x,boss.g.position.z,'#ff5c3a',5);
-  ctx.restore();
-  ctx.fillStyle='#fff';
-  ctx.beginPath(); ctx.moveTo(60,52); ctx.lineTo(55,66); ctx.lineTo(60,62); ctx.lineTo(65,66); ctx.closePath(); ctx.fill();
-  ctx.strokeStyle='rgba(0,246,255,.5)'; ctx.beginPath(); ctx.arc(60,60,58,0,7); ctx.stroke();
-}
-
-/* ========================= BUCLE PRINCIPAL ======================== */
-const clock=new THREE.Clock();
-director.peak=.2;
-function animate(){
-  requestAnimationFrame(animate);
-  const rdt=Math.min(clock.getDelta(),.05);
-  if(GAME.state==='title'||GAME.state==='lobby'){
-    updateLobbyCamera(rdt);
-  } else if(GAME.state==='playing'){
-    const ts=effTS();
-    const dt=rdt*ts;
-    GAME.time+=dt;
-    director.peak=Math.max(director.peak,director.pressure);
-    updatePlayer(dt);
-    if(GAME.mode==='client'){ updateDroneInterp(dt); Net.updateRemotes(dt); }
-    else { updateEnemyAI(dt); updateBossAI(dt); Net.updateRemotes(dt); }
-    updateProjectiles(dt);
-    updateDebris(dt);
-    updateRings(dt);
-    updatePickups(dt);
-    updateDirector(dt);
-    updateWeather(dt);
-    updateGlitch(rdt);
-    refreshHud();
-    drawMinimap();
-    if(GAME.mode==='host'){ Net.snapT+=rdt;
-      if(Net.snapT>.1){ Net.snapT=0; Net.hostSnapshot(); } }
-    if(TIME.slowT>0) TIME.slowT-=rdt;
-    hurtT=Math.max(0,hurtT-rdt*2);
+  if(GAME.isMobile){
+    $('touch-ui').classList.add('on');
+    setupTouch();
+  } else {
+    $('pc-hint').style.display='block';
   }
-  renderer.render(scene,camera);
+  
+  if(!world.builtOnce) buildCity();
+  resetRun();
+  if(!player.mesh){
+    player.mesh=buildAvatar(GAME.avatar, false);
+    scene.add(player.mesh);
+  }
 }
 
-/* ============================ INIT ================================ */
-if(GAME.isMobile) $('pc-hint').style.display='none';
-setupTouch();
-initLobbyScene();
-animate();
+/* ==================== MINIMAPA ==================================== */
+const minimapCanvas = $('minimap');
+const mctx = minimapCanvas.getContext('2d');
+function updateMinimap(){
+  mctx.clearRect(0,0,120,120);
+  mctx.save();
+  mctx.translate(60,60);
+  mctx.rotate(-player.yaw);
+  
+  mctx.fillStyle='#00f6ff';
+  mctx.beginPath(); mctx.arc(0,0,4,0,Math.PI*2); mctx.fill();
+
+  const scale = 1.2;
+  for(const d of world.drones){
+    const dx = (d.position.x - player.pos.x) * scale;
+    const dz = (d.position.z - player.pos.z) * scale;
+    if(Math.hypot(dx,dz)<55){
+      mctx.fillStyle = d.userData.isAlly ? '#39ff6a' : '#ff2b3f';
+      mctx.beginPath(); mctx.arc(dx, dz, 3, 0, Math.PI*2); mctx.fill();
+    }
+  }
+
+  if(boss.active && boss.g){
+    const dx = (boss.g.position.x - player.pos.x) * scale;
+    const dz = (boss.g.position.z - player.pos.z) * scale;
+    mctx.fillStyle = '#ff5c3a';
+    mctx.beginPath(); mctx.arc(dx, dz, 6, 0, Math.PI*2); mctx.fill();
+  }
+
+  mctx.restore();
+}
+
+/* ==================== BUCLE PRINCIPAL ============================= */
+let lastT = performance.now();
+function animate(now){
+  requestAnimationFrame(animate);
+  const dtReal = Math.min(.1, (now - lastT)/1000);
+  lastT = now;
+  const dt = dtReal * effTS();
+  GAME.time += dtReal;
+
+  if(GAME.state==='lobby'){
+    updateLobbyCamera(dtReal);
+    renderer.render(scene, camera);
+    return;
+  }
+
+  if(GAME.state==='playing'){
+    updateDirector(dt);
+    updateWeather(dtReal);
+    updateGlitch(dtReal);
+    updatePlayer(dt);
+    updateProjectiles(dt);
+    updateDroneInterp(dt);
+    updateDebris(dtReal);
+    updatePickups(dtReal);
+    updateRings(dtReal);
+    if(GAME.mode!=='client'){
+      updateEnemyAI(dt);
+      updateBossAI(dt);
+    }
+
+    $('hp-label').textContent=`SALUD ${Math.ceil(player.hp)}/${player.maxHp}`;
+    $('hp-fill').style.width=(player.hp/player.maxHp*100)+'%';
+    $('sh-label').textContent=`ESCUDO ${Math.ceil(player.shield)}/${player.maxShield}`;
+    $('sh-fill').style.width=(player.shield/player.maxShield*100)+'%';
+    $('en-label').textContent=`FOCO ${Math.round(focus.energy)}%`;
+    $('en-fill').style.width=focus.energy+'%';
+    $('kill-count').textContent=GAME.kills;
+    $('wave-num').textContent=GAME.wave;
+
+    const w=WEAPONS[player.weaponIdx];
+    $('ammo-tag').innerHTML=`MUN.<br><b>${player.mags[player.weaponIdx]}/${player.reserve}</b>`;
+    $('weapon-tag').innerHTML=`${w.label} <i>NV·${w.lvl}</i>`;
+
+    const hackTag=$('hack-tag');
+    if(hackT>0){
+      hackTag.classList.add('show');
+      hackTag.textContent=`HACKEANDO DRONE [${Math.round(hackT*100)}%]`;
+    } else {
+      hackTag.classList.remove('show');
+    }
+
+    updateMinimap();
+  }
+
+  renderer.render(scene, camera);
+}
+requestAnimationFrame(animate);
 </script>
 </body>
-                                                                 </html>
+</html>
+
